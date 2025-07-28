@@ -242,7 +242,7 @@ pub fn build(b: *std.Build) void {
                     "libs/imgui/backends/imgui_impl_glfw.cpp",
                     "libs/imgui/backends/imgui_impl_wgpu.cpp",
                 },
-                .flags = cflags,
+                .flags = &(cflags.* ++ .{"-DIMGUI_IMPL_WEBGPU_BACKEND_DAWN"}),
             });
         },
         .glfw_opengl3 => {
