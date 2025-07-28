@@ -234,7 +234,7 @@ pub fn build(b: *std.Build) void {
                     imgui.addIncludePath(zglfw.path("libs/glfw/include"));
                 }
                 if (b.lazyDependency("zgpu", .{})) |zgpu| {
-                    imgui.addIncludePath(zgpu.path("libs/dawn/include"));
+                    imgui.addIncludePath(zgpu.path("include"));
                 }
             }
             imgui.addCSourceFiles(.{
