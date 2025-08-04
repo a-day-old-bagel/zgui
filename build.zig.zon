@@ -23,7 +23,7 @@
             .lazy = true,
         },
         .zgpu = .{
-            .url = "https://github.com/a-day-old-bagel/zgpu/archive/c20561486b4358789472fb649fbc70c3ec3a8f5e.tar.gz",
+            .url = "https://github.com/a-day-old-bagel/zgpu/archive/5f31b60ed16370549b2a4084fc2a8382af58dacd.tar.gz",
             .hash = "zgpu-0.14.0-dev-nqFT5I7KBgDxCnl5k3dF08Ck9voKckP26osUmAC0Vmel",
             .lazy = true,
         },
