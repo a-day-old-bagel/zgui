@@ -31,6 +31,12 @@
 
 #include <webgpu/webgpu.h>
 
+// BEGIN FIX(zig-gamedev)
+#ifdef __cplusplus
+extern "C" {
+#endif
+// END FIX(zig-gamedev)
+
 // Initialization data, for ImGui_ImplWGPU_Init()
 struct ImGui_ImplWGPU_InitInfo
 {
@@ -69,5 +75,11 @@ struct ImGui_ImplWGPU_RenderState
     WGPUDevice                  Device;
     WGPURenderPassEncoder       RenderPassEncoder;
 };
+
+// BEGIN FIX(zig-gamedev)
+#ifdef __cplusplus
+} // extern "C"
+#endif
+// END FIX(zig-gamedev)
 
 #endif // #ifndef IMGUI_DISABLE
