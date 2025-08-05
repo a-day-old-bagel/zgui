@@ -23,8 +23,8 @@
             .lazy = true,
         },
         .zgpu = .{
-            .url = "https://github.com/a-day-old-bagel/zgpu/archive/e37b972e312c1934d21c6a49310d3460a5cdaf8e.tar.gz",
-            .hash = "zgpu-0.14.0-dev-nqFT5MnJBgDg73mxdJBQxOcjbJkkDSDw3FdvwEMpUfhh",
+            .url = "https://github.com/a-day-old-bagel/zgpu/archive/1e52b10d8c374626f3e8c63158b1ce8b9ef97a61.tar.gz",
+            .hash = "zgpu-0.14.0-dev-nqFT5PPMBgC-6vvTwmxubnkb9-Kx7QJvbrCTQlWUHDfh",
             .lazy = true,
         },
         .zsdl = .{
