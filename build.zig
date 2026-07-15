@@ -271,7 +271,7 @@ pub fn build(b: *std.Build) void {
             }
             if (b.lazyDependency("zgpu", .{})) |zgpu| {
                 if (target.result.os.tag != .emscripten) {
-                    imgui_mod.addIncludePath(zgpu.path("libs/dawn/include"));
+                    imgui_mod.addIncludePath(zgpu.path("include"));
                 }
             }
             imgui_mod.addCSourceFiles(.{
@@ -279,7 +279,7 @@ pub fn build(b: *std.Build) void {
                     "libs/imgui/backends/imgui_impl_glfw.cpp",
                     "libs/imgui/backends/imgui_impl_wgpu.cpp",
                 },
-                .flags = cflags,
+                .flags = &(cflags.* ++ .{"-DIMGUI_IMPL_WEBGPU_BACKEND_DAWN"}),
             });
         },
         .glfw_opengl3 => {
