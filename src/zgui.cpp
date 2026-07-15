@@ -213,6 +213,11 @@ extern "C"
         return ImGui::GetWindowHeight();
     }
 
+    ZGUI_API void* zguiGetCurrentWindow(void)
+    {
+        return ImGui::GetCurrentWindow();
+    }
+
     ZGUI_API void zguiGetMouseDragDelta(ImGuiMouseButton button, float lock_threshold, float delta[2])
     {
         const ImVec2 d = ImGui::GetMouseDragDelta(button, lock_threshold);
@@ -1116,6 +1121,22 @@ extern "C"
             user_texture_ref,
             {w, h},
             {uv0[0], uv0[1]},
+            {uv1[0], uv1[1]});
+    }
+
+    ZGUI_API void zguiImageWithBg(
+        ImTextureRef user_texture_id,
+        float w,
+        float h,
+        const float uv0[2],
+        const float uv1[2],
+        const float bg_col[4],
+        const float tint_col[4])
+    {
+        ImGui::ImageWithBg(
+            user_texture_id,
+            {w, h},
+            {uv0[0], uv0[1]},
             {uv1[0], uv1[1]},
             {bg_col[0], bg_col[1], bg_col[2], bg_col[3]},
             {tint_col[0], tint_col[1], tint_col[2], tint_col[3]});
@@ -1611,6 +1632,11 @@ extern "C"
         ImGui::GetIO().BackendFlags = flags;
     }
 
+    ZGUI_API ImGuiBackendFlags zguiIoGetBackendFlags()
+    {
+        return ImGui::GetIO().BackendFlags;
+    }
+
     ZGUI_API void zguiIoSetDisplaySize(float width, float height)
     {
         ImGui::GetIO().DisplaySize = {width, height};
@@ -1671,6 +1697,11 @@ extern "C"
     ZGUI_API void zguiIoAddCharacterEvent(unsigned int c)
     {
         ImGui::GetIO().AddInputCharacter(c);
+    }
+
+    ZGUI_API ImVector<ImTextureData*>* zguiPlatformIoGetTextures()
+    {
+        return &ImGui::GetPlatformIO().Textures;
     }
 
     ZGUI_API bool zguiIsItemHovered(ImGuiHoveredFlags flags)
@@ -1914,6 +1945,36 @@ extern "C"
     {
         ImGui::CloseCurrentPopup();
     }
+
+    ZGUI_API void zguiPlotLines(
+        const char* label, 
+        const float* values, 
+        int values_count, 
+        int values_offset, 
+        const char* overlay_text, 
+        float scale_min, 
+        float scale_max, 
+        float graph_size[2], 
+        int stride)
+    {
+        ImGui::PlotLines(label, values, values_count, values_offset, overlay_text, scale_min, scale_max, ImVec2(graph_size[0], graph_size[1]), stride);
+    }  
+    
+
+    ZGUI_API void zguiPlotHistogram(
+        const char* label, 
+        const float* values, 
+        int values_count, 
+        int values_offset, 
+        const char* overlay_text, 
+        float scale_min, 
+        float scale_max, 
+        float graph_size[2], 
+        int stride)
+    {
+        ImGui::PlotHistogram(label, values, values_count, values_offset, overlay_text, scale_min, scale_max, ImVec2(graph_size[0], graph_size[1]), stride);
+    }
+
     //--------------------------------------------------------------------------------------------------
     //
     // Tables
@@ -2424,6 +2485,21 @@ extern "C"
         const char *text_end)
     {
         draw_list->AddText({pos[0], pos[1]}, col, text_begin, text_end);
+    }
+
+    ZGUI_API void zguiDrawList_AddTextExtended(
+        ImDrawList *draw_list,
+        ImFont* font, 
+        float font_size, 
+        const float pos[2], 
+        ImU32 col, 
+        const char* text_begin, 
+        const char* text_end, 
+        float wrap_width, 
+        const float cpu_fine_clip_rect[][4])
+    {   
+        const ImVec4* clip_rect = (cpu_fine_clip_rect != nullptr) ? (const ImVec4 *)&cpu_fine_clip_rect[0][0] : nullptr;
+        draw_list->AddText(font, font_size, {pos[0], pos[1]}, col, text_begin, text_end, wrap_width, clip_rect);
     }
 
     ZGUI_API void zguiDrawList_AddPolyline(

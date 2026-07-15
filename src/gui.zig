@@ -8,6 +8,7 @@ pub const plot = @import("plot.zig");
 pub const gizmo = @import("gizmo.zig");
 pub const node_editor = @import("node_editor.zig");
 pub const te = @import("te.zig");
+pub const knobs = @import("knobs.zig");
 
 pub const backend = switch (@import("zgui_options").backend) {
     .glfw_wgpu => @import("backend_glfw_wgpu.zig"),
@@ -19,9 +20,12 @@ pub const backend = switch (@import("zgui_options").backend) {
     .osx_metal => @import("backend_osx_metal.zig"),
     .sdl2 => @import("backend_sdl2.zig"),
     .sdl2_opengl3 => @import("backend_sdl2_opengl.zig"),
+    .sdl2_renderer => @import("backend_sdl2_renderer.zig"),
     .sdl3 => @import("backend_sdl3.zig"),
     .sdl3_opengl3 => @import("backend_sdl3_opengl.zig"),
+    .sdl3_renderer => @import("backend_sdl3_renderer.zig"),
     .sdl3_gpu => @import("backend_sdl3_gpu.zig"),
+    .sdl3_vulkan => @import("backend_sdl3_vulkan.zig"),
     .no_backend => .{},
 };
 const te_enabled = @import("zgui_options").with_te;
@@ -49,17 +53,38 @@ pub fn init(allocator: std.mem.Allocator) void {
 
         _ = zguiCreateContext(null);
 
-        temp_buffer = std.ArrayList(u8).init(allocator);
-        temp_buffer.?.resize(3 * 1024 + 1) catch unreachable;
+        temp_buffer = std.ArrayList(u8){};
+        temp_buffer.?.resize(allocator, 3 * 1024 + 1) catch unreachable;
 
         if (te_enabled) {
             te.init();
         }
     }
 }
+/// Allows sharing a context across static/DLL boundaries. This is useful for
+/// hot-reloading mechanisms which rely on shared libraries.
+/// See "CONTEXT AND MEMORY ALLOCATORS" section of ImGui docs.
+pub fn initWithExistingContext(allocator: std.mem.Allocator, ctx: Context) void {
+    mem_allocator = allocator;
+    mem_allocations = std.AutoHashMap(usize, usize).init(allocator);
+    mem_allocations.?.ensureTotalCapacity(32) catch @panic("zgui: out of memory");
+    zguiSetAllocatorFunctions(zguiMemAlloc, zguiMemFree);
+
+    zguiSetCurrentContext(ctx);
+
+    temp_buffer = std.ArrayList(u8){};
+    temp_buffer.?.resize(mem_allocator.?, 3 * 1024 + 1) catch unreachable;
+
+    if (te_enabled) {
+        te.init();
+    }
+}
+pub fn getCurrentContext() ?Context {
+    return zguiGetCurrentContext();
+}
 pub fn deinit() void {
     if (zguiGetCurrentContext() != null) {
-        temp_buffer.?.deinit();
+        temp_buffer.?.deinit(mem_allocator.?);
         zguiDestroyContext(null);
 
         // Must be after destroy imgui context.
@@ -73,8 +98,7 @@ pub fn deinit() void {
             while (it.next()) |kv| {
                 const address = kv.key_ptr.*;
                 const size = kv.value_ptr.*;
-                // mem_allocator.?.free(@as([*]align(mem_alignment.toByteUnits()) u8, @ptrFromInt(address))[0..size]);
-                mem_allocator.?.free(@as([*]align(mem_alignment) u8, @ptrFromInt(address))[0..size]);
+                mem_allocator.?.free(@as([*]align(mem_alignment.toByteUnits()) u8, @ptrFromInt(address))[0..size]);
                 std.log.info(
                     "[zgui] Possible memory leak or static memory usage detected: (address: 0x{x}, size: {d})",
                     .{ address, size },
@@ -90,25 +114,26 @@ pub fn deinit() void {
     }
 }
 pub fn initNoContext(allocator: std.mem.Allocator) void {
+    mem_allocator = allocator;
     if (temp_buffer == null) {
-        temp_buffer = std.ArrayList(u8).init(allocator);
-        temp_buffer.?.resize(3 * 1024 + 1) catch unreachable;
+        temp_buffer = std.ArrayList(u8){};
+        temp_buffer.?.resize(mem_allocator.?, 3 * 1024 + 1) catch unreachable;
     }
 }
 pub fn deinitNoContext() void {
-    if (temp_buffer) |buf| {
-        buf.deinit();
+    if (temp_buffer) |*buf| {
+        buf.deinit(mem_allocator.?);
     }
 }
 extern fn zguiCreateContext(shared_font_atlas: ?*const anyopaque) Context;
 extern fn zguiDestroyContext(ctx: ?Context) void;
 extern fn zguiGetCurrentContext() ?Context;
+extern fn zguiSetCurrentContext(ctx: ?Context) void;
 //--------------------------------------------------------------------------------------------------
 var mem_allocator: ?std.mem.Allocator = null;
 var mem_allocations: ?std.AutoHashMap(usize, usize) = null;
 var mem_mutex: std.Thread.Mutex = .{};
-// const mem_alignment: std.mem.Alignment = .@"16";
-const mem_alignment = 16;
+const mem_alignment: std.mem.Alignment = .@"16";
 
 fn zguiMemAlloc(size: usize, _: ?*anyopaque) callconv(.c) ?*anyopaque {
     mem_mutex.lock();
@@ -133,8 +158,7 @@ fn zguiMemFree(maybe_ptr: ?*anyopaque, _: ?*anyopaque) callconv(.c) void {
         if (mem_allocations != null) {
             if (mem_allocations.?.fetchRemove(@intFromPtr(ptr))) |kv| {
                 const size = kv.value;
-                // const mem = @as([*]align(mem_alignment.toByteUnits()) u8, @ptrCast(@alignCast(ptr)))[0..size];
-                const mem = @as([*]align(mem_alignment) u8, @ptrCast(@alignCast(ptr)))[0..size];
+                const mem = @as([*]align(mem_alignment.toByteUnits()) u8, @ptrCast(@alignCast(ptr)))[0..size];
                 mem_allocator.?.free(mem);
             }
         }
@@ -347,6 +371,10 @@ pub const io = struct {
     pub const setConfigFlags = zguiIoSetConfigFlags;
     extern fn zguiIoSetConfigFlags(flags: ConfigFlags) void;
 
+    /// `pub fn getBackendFlags() BackendFlags`
+    pub const getBackendFlags = zguiIoGetBackendFlags;
+    extern fn zguiIoGetBackendFlags() BackendFlags;
+
     /// `pub fn setBackendFlags(flags: BackendFlags) void`
     pub const setBackendFlags = zguiIoSetBackendFlags;
     extern fn zguiIoSetBackendFlags(flags: BackendFlags) void;
@@ -384,6 +412,11 @@ pub const io = struct {
     extern fn zguiIoAddCharacterEvent(char: c_int) void;
 };
 
+pub const platform_io = struct {
+    pub const getTextures = zguiPlatformIoGetTextures;
+    extern fn zguiPlatformIoGetTextures() *Vector(*TextureData);
+};
+
 pub fn setClipboardText(value: [:0]const u8) void {
     zguiSetClipboardText(value.ptr);
 }
@@ -394,7 +427,7 @@ pub fn getClipboardText() [:0]const u8 {
 extern fn zguiSetClipboardText(text: [*:0]const u8) void;
 extern fn zguiGetClipboardText() [*:0]const u8;
 //--------------------------------------------------------------------------------------------------
-const Context = *opaque {};
+pub const Context = *opaque {};
 pub const DrawData = *extern struct {
     valid: bool,
     cmd_lists_count: c_int,
@@ -405,15 +438,55 @@ pub const DrawData = *extern struct {
     display_size: [2]f32,
     framebuffer_scale: [2]f32,
     owner_viewport: ?*Viewport,
-    textures: *Vector(TextureIdent),
+    textures: *Vector(*TextureData),
 };
 pub const Font = *opaque {};
 pub const Ident = u32;
 pub const TextureIdent = enum(u64) { _ };
 pub const TextureRef = extern struct {
-    tex_data: ?*anyopaque,
+    tex_data: ?*TextureData,
     tex_id: TextureIdent,
 };
+
+pub const TextureStatus = enum(c_int) {
+    ok,
+    destroyed,
+    want_create,
+    want_updates,
+    want_destroy,
+};
+
+pub const TextureFormat = enum(c_int) {
+    rgba32,
+    alpha8,
+};
+
+pub const TextureRect = extern struct {
+    x: c_ushort,
+    y: c_ushort,
+    w: c_ushort,
+    h: c_ushort,
+};
+
+pub const TextureData = extern struct {
+    unique_id: c_int,
+    status: TextureStatus,
+    backend_user_data: ?*anyopaque,
+    tex_id: TextureIdent,
+    format: TextureFormat,
+    width: c_int,
+    height: c_int,
+    bytes_per_pixel: c_int,
+    pixels: [*]u8,
+    used_rect: TextureRect,
+    update_Rect: TextureRect,
+    updates: Vector(TextureRect),
+    unused_Frames: c_int,
+    ref_count: c_ushort,
+    use_colors: bool,
+    want_destroy_next_frame: bool,
+};
+
 pub const Wchar = if (@import("zgui_options").use_wchar32) u32 else u16;
 pub const Key = enum(c_int) {
     none = 0,
@@ -934,6 +1007,12 @@ extern fn zguiGetWindowSize(size: *[2]f32) void;
 extern fn zguiGetWindowWidth() f32;
 extern fn zguiGetWindowHeight() f32;
 extern fn zguiGetContentRegionAvail(size: *[2]f32) void;
+
+pub const Window = opaque {};
+/// `pub fn getCurrentWindow() *Window`
+pub const getCurrentWindow = zguiGetCurrentWindow;
+extern fn zguiGetCurrentWindow() *Window;
+
 //--------------------------------------------------------------------------------------------------
 //
 // Docking
@@ -968,12 +1047,12 @@ pub const DockNodeFlags = packed struct(c_int) {
 };
 extern fn zguiDockSpace(str_id: [*:0]const u8, size: *const [2]f32, flags: DockNodeFlags) Ident;
 
-pub fn DockSpace(str_id: [:0]const u8, size: [2]f32, flags: DockNodeFlags) Ident {
+pub fn dockSpace(str_id: [:0]const u8, size: [2]f32, flags: DockNodeFlags) Ident {
     return zguiDockSpace(str_id.ptr, &size, flags);
 }
 
-extern fn zguiDockSpaceOverViewport(dockspace_id: Ident, viewport: Viewport, flags: DockNodeFlags) Ident;
-pub const DockSpaceOverViewport = zguiDockSpaceOverViewport;
+extern fn zguiDockSpaceOverViewport(dockspace_id: Ident, viewport: *Viewport, flags: DockNodeFlags) Ident;
+pub const dockSpaceOverViewport = zguiDockSpaceOverViewport;
 
 //--------------------------------------------------------------------------------------------------
 //
@@ -1371,9 +1450,9 @@ extern fn zguiGetFont() Font;
 /// `pub fn getFontSize() f32`
 pub const getFontSize = zguiGetFontSize;
 extern fn zguiGetFontSize() f32;
-/// `void pushFont(font: Font, font_size_base_unscaled: f32) void`
+/// `void pushFont(font: ?Font, font_size_base_unscaled: f32) void`
 pub const pushFont = zguiPushFont;
-extern fn zguiPushFont(font: Font, font_size_base_unscaled: f32) void;
+extern fn zguiPushFont(font: ?Font, font_size_base_unscaled: f32) void;
 /// `void popFont() void`
 pub const popFont = zguiPopFont;
 extern fn zguiPopFont() void;
@@ -1493,7 +1572,7 @@ pub fn getCursorScreenPos() [2]f32 {
     return pos;
 }
 pub fn setCursorScreenPos(screen_pos: [2]f32) void {
-    zguiSetCursorPos(screen_pos[0], screen_pos[1]);
+    zguiSetCursorScreenPos(screen_pos[0], screen_pos[1]);
 }
 extern fn zguiGetCursorStartPos(pos: *[2]f32) void;
 extern fn zguiGetCursorScreenPos(pos: *[2]f32) void;
@@ -1833,6 +1912,66 @@ pub const textLink = zguiTextLink;
 
 extern fn zguiTextLinkOpenURL(label: [*:0]const u8, url: ?[*:0]const u8) void;
 pub const textLinkOpenURL = zguiTextLinkOpenURL;
+//--------------------------------------------------------------------------------------------------
+const PlotArgs = struct {
+    v: [*]f32,
+    v_count: c_int,
+    v_offset: c_int = 0,
+    overlay: ?[:0]const u8 = null,
+    scale_min: f32 = f32_max,
+    scale_max: f32 = f32_max,
+    graph_size: [2]f32 = .{ 0, 0 },
+    stride: c_int = @sizeOf(f32),
+};
+pub fn plotLines(label: [*:0]const u8, args: PlotArgs) void {
+    zguiPlotLines(
+        label,
+        args.v,
+        args.v_count,
+        args.v_offset,
+        if (args.overlay) |o| o else null,
+        args.scale_min,
+        args.scale_max,
+        &args.graph_size,
+        args.stride,
+    );
+}
+extern fn zguiPlotLines(
+    label: [*:0]const u8,
+    v: [*]f32,
+    v_count: c_int,
+    v_offset: c_int,
+    overlay: ?[*:0]const u8,
+    scale_min: f32,
+    scale_max: f32,
+    graph_size: *const [2]f32,
+    stride: c_int,
+) void;
+
+pub fn plotHistogram(label: [*:0]const u8, args: PlotArgs) void {
+    zguiPlotHistogram(
+        label,
+        args.v,
+        args.v_count,
+        args.v_offset,
+        if (args.overlay) |o| o else null,
+        args.scale_min,
+        args.scale_max,
+        &args.graph_size,
+        args.stride,
+    );
+}
+extern fn zguiPlotHistogram(
+    label: [*:0]const u8,
+    v: [*]f32,
+    v_count: c_int,
+    v_offset: c_int,
+    overlay: ?[*:0]const u8,
+    scale_min: f32,
+    scale_max: f32,
+    graph_size: *const [2]f32,
+    stride: c_int,
+) void;
 
 //--------------------------------------------------------------------------------------------------
 //
@@ -2613,7 +2752,7 @@ pub const InputTextCallbackData = extern struct {
     }
 };
 
-pub const InputTextCallback = *const fn (data: *InputTextCallbackData) i32;
+pub const InputTextCallback = *const fn (data: *InputTextCallbackData) callconv(.c) i32;
 //--------------------------------------------------------------------------------------------------
 pub fn inputText(label: [:0]const u8, args: struct {
     buf: [:0]u8,
@@ -3613,12 +3752,12 @@ var temp_buffer: ?std.ArrayList(u8) = null;
 
 pub fn format(comptime fmt: []const u8, args: anytype) []const u8 {
     const len = std.fmt.count(fmt, args);
-    if (len > temp_buffer.?.items.len) temp_buffer.?.resize(@intCast(len + 64)) catch unreachable;
+    if (len > temp_buffer.?.items.len) temp_buffer.?.resize(mem_allocator.?, @intCast(len + 64)) catch unreachable;
     return std.fmt.bufPrint(temp_buffer.?.items, fmt, args) catch unreachable;
 }
 pub fn formatZ(comptime fmt: []const u8, args: anytype) [:0]const u8 {
     const len = std.fmt.count(fmt ++ "\x00", args);
-    if (len > temp_buffer.?.items.len) temp_buffer.?.resize(@intCast(len + 64)) catch unreachable;
+    if (len > temp_buffer.?.items.len) temp_buffer.?.resize(mem_allocator.?, @intCast(len + 64)) catch unreachable;
     return std.fmt.bufPrintZ(temp_buffer.?.items, fmt, args) catch unreachable;
 }
 //--------------------------------------------------------------------------------------------------
@@ -3808,41 +3947,79 @@ pub const tabItemButton = zguiTabItemButton;
 // Viewport
 //
 //--------------------------------------------------------------------------------------------------
-pub const Viewport = *opaque {
-    pub fn getId(viewport: Viewport) Ident {
+pub const ViewportFlags = packed struct(c_int) {
+    none: bool = false,
+    is_platform_window: bool = false,
+    is_platform_monitor: bool = false,
+    owned_by_app: bool = false,
+    no_decoration: bool = false,
+    no_task_bar_icon: bool = false,
+    no_focus_on_appearing: bool = false,
+    no_focus_on_click: bool = false,
+    no_inputs: bool = false,
+    no_renderer_clear: bool = false,
+    no_auto_merge: bool = false,
+    top_most: bool = false,
+    can_host_other_windows: bool = false,
+    is_minimized: bool = false,
+    is_focused: bool = false,
+    _: u17 = 0,
+};
+
+pub const Viewport = extern struct {
+    id: Ident,
+    flags: ViewportFlags,
+    pos: [2]f32,
+    size: [2]f32,
+    framebuffer_scale: [2]f32,
+    work_pos: [2]f32,
+    work_size: [2]f32,
+    dpi_scale: f32,
+    parent_viewport_id: Ident,
+    draw_data: *DrawData,
+    renderer_user_data: *anyopaque,
+    platform_user_data: *anyopaque,
+    platform_handle: *anyopaque,
+    platform_handle_raw: *anyopaque,
+    platform_window_created: bool,
+    platform_request_move: bool,
+    platform_request_resize: bool,
+    platform_request_close: bool,
+
+    pub fn getId(viewport: *Viewport) Ident {
         return zguiViewport_GetId(viewport);
     }
-    extern fn zguiViewport_GetId(viewport: Viewport) Ident;
+    extern fn zguiViewport_GetId(viewport: *Viewport) Ident;
 
-    pub fn getPos(viewport: Viewport) [2]f32 {
+    pub fn getPos(viewport: *Viewport) [2]f32 {
         var pos: [2]f32 = undefined;
         zguiViewport_GetPos(viewport, &pos);
         return pos;
     }
-    extern fn zguiViewport_GetPos(viewport: Viewport, pos: *[2]f32) void;
+    extern fn zguiViewport_GetPos(viewport: *Viewport, pos: *[2]f32) void;
 
-    pub fn getSize(viewport: Viewport) [2]f32 {
+    pub fn getSize(viewport: *Viewport) [2]f32 {
         var pos: [2]f32 = undefined;
         zguiViewport_GetSize(viewport, &pos);
         return pos;
     }
-    extern fn zguiViewport_GetSize(viewport: Viewport, size: *[2]f32) void;
+    extern fn zguiViewport_GetSize(viewport: *Viewport, size: *[2]f32) void;
 
-    pub fn getWorkPos(viewport: Viewport) [2]f32 {
+    pub fn getWorkPos(viewport: *Viewport) [2]f32 {
         var pos: [2]f32 = undefined;
         zguiViewport_GetWorkPos(viewport, &pos);
         return pos;
     }
-    extern fn zguiViewport_GetWorkPos(viewport: Viewport, pos: *[2]f32) void;
+    extern fn zguiViewport_GetWorkPos(viewport: *Viewport, pos: *[2]f32) void;
 
-    pub fn getWorkSize(viewport: Viewport) [2]f32 {
+    pub fn getWorkSize(viewport: *Viewport) [2]f32 {
         var pos: [2]f32 = undefined;
         zguiViewport_GetWorkSize(viewport, &pos);
         return pos;
     }
-    extern fn zguiViewport_GetWorkSize(viewport: Viewport, size: *[2]f32) void;
+    extern fn zguiViewport_GetWorkSize(viewport: *Viewport, size: *[2]f32) void;
 
-    pub fn getCenter(viewport: Viewport) [2]f32 {
+    pub fn getCenter(viewport: *Viewport) [2]f32 {
         const pos = viewport.getPos();
         const size = viewport.getSize();
         return .{
@@ -3851,7 +4028,7 @@ pub const Viewport = *opaque {
         };
     }
 
-    pub fn getWorkCenter(viewport: Viewport) [2]f32 {
+    pub fn getWorkCenter(viewport: *Viewport) [2]f32 {
         const pos = viewport.getWorkPos();
         const size = viewport.getWorkSize();
         return .{
@@ -3861,7 +4038,7 @@ pub const Viewport = *opaque {
     }
 };
 pub const getMainViewport = zguiGetMainViewport;
-extern fn zguiGetMainViewport() Viewport;
+extern fn zguiGetMainViewport() *Viewport;
 
 pub const updatePlatformWindows = zguiUpdatePlatformWindows;
 extern fn zguiUpdatePlatformWindows() void;
@@ -3949,7 +4126,7 @@ pub fn beginDragDropSource(flags: DragDropFlags) bool {
 
 /// Note: `payload_type` can be at most 32 characters long
 pub fn setDragDropPayload(payload_type: [*:0]const u8, data: []const u8, cond: Condition) bool {
-    return zguiSetDragDropPayload(payload_type, @alignCast(@ptrCast(data.ptr)), data.len, cond);
+    return zguiSetDragDropPayload(payload_type, @ptrCast(@alignCast(data.ptr)), data.len, cond);
 }
 pub fn endDragDropSource() void {
     zguiEndDragDropSource();
@@ -4156,8 +4333,8 @@ pub const DrawList = *opaque {
     pub const popClipRect = zguiDrawList_PopClipRect;
     extern fn zguiDrawList_PopClipRect(draw_list: DrawList) void;
     //----------------------------------------------------------------------------------------------
-    pub const pushTexture = zguiDrawList_PushTexture;
-    extern fn zguiDrawList_PushTexture(draw_list: DrawList, texture_ref: TextureRef) void;
+    pub const pushTexture = zguiDrawList_PushTextureRef;
+    extern fn zguiDrawList_PushTextureRef(draw_list: DrawList, texture_ref: TextureRef) void;
 
     pub const popTexture = zguiDrawList_PopTexture;
     extern fn zguiDrawList_PopTexture(draw_list: DrawList) void;
@@ -4180,7 +4357,7 @@ pub const DrawList = *opaque {
         p1: [2]f32,
         p2: [2]f32,
         col: u32,
-        thickness: f32,
+        thickness: f32 = 1.0,
     }) void {
         zguiDrawList_AddLine(draw_list, &args.p1, &args.p2, args.col, args.thickness);
     }
@@ -4501,6 +4678,53 @@ pub const DrawList = *opaque {
         col: u32,
         text: [*]const u8,
         text_end: [*]const u8,
+    ) void;
+    const AddTextArgs = struct {
+        font: ?Font,
+        font_size: f32,
+        wrap_width: f32 = 0,
+        cpu_fine_clip_rect: ?[*]const [4]f32 = null,
+    };
+    pub fn addTextExtended(
+        draw_list: DrawList,
+        pos: [2]f32,
+        col: u32,
+        comptime fmt: []const u8,
+        args: anytype,
+        add_text_args: AddTextArgs,
+    ) void {
+        const txt = format(fmt, args);
+        addTextExtendedUnformatted(draw_list, pos, col, txt, add_text_args);
+    }
+    pub fn addTextExtendedUnformatted(
+        draw_list: DrawList,
+        pos: [2]f32,
+        col: u32,
+        txt: []const u8,
+        add_text_args: AddTextArgs,
+    ) void {
+        zguiDrawList_AddTextExtended(
+            draw_list,
+            add_text_args.font,
+            add_text_args.font_size,
+            &pos,
+            col,
+            txt.ptr,
+            txt.ptr + txt.len,
+            add_text_args.wrap_width,
+            add_text_args.cpu_fine_clip_rect,
+        );
+    }
+    extern fn zguiDrawList_AddTextExtended(
+        draw_list: DrawList,
+        font: ?Font,
+        font_size: f32,
+        pos: *const [2]f32,
+        col: u32,
+        text: [*]const u8,
+        text_end: [*]const u8,
+        wrap_width: f32,
+        cpu_fine_clip_rect: ?[*]const [4]f32,
     ) void;
     //----------------------------------------------------------------------------------------------
     pub fn addPolyline(draw_list: DrawList, points: []const [2]f32, args: struct {
