@@ -1121,22 +1121,6 @@ extern "C"
             user_texture_ref,
             {w, h},
             {uv0[0], uv0[1]},
-            {uv1[0], uv1[1]});
-    }
-
-    ZGUI_API void zguiImageWithBg(
-        ImTextureRef user_texture_id,
-        float w,
-        float h,
-        const float uv0[2],
-        const float uv1[2],
-        const float bg_col[4],
-        const float tint_col[4])
-    {
-        ImGui::ImageWithBg(
-            user_texture_id,
-            {w, h},
-            {uv0[0], uv0[1]},
             {uv1[0], uv1[1]},
             {bg_col[0], bg_col[1], bg_col[2], bg_col[3]},
             {tint_col[0], tint_col[1], tint_col[2], tint_col[3]});
