@@ -53,7 +53,7 @@ pub fn init(allocator: std.mem.Allocator) void {
 
         _ = zguiCreateContext(null);
 
-        temp_buffer = std.ArrayList(u8){};
+        temp_buffer = std.ArrayList(u8).empty;
         temp_buffer.?.resize(allocator, 3 * 1024 + 1) catch unreachable;
 
         if (te_enabled) {
@@ -72,7 +72,7 @@ pub fn initWithExistingContext(allocator: std.mem.Allocator, ctx: Context) void 
 
     zguiSetCurrentContext(ctx);
 
-    temp_buffer = std.ArrayList(u8){};
+    temp_buffer = std.ArrayList(u8).empty;
     temp_buffer.?.resize(mem_allocator.?, 3 * 1024 + 1) catch unreachable;
 
     if (te_enabled) {
@@ -116,7 +116,7 @@ pub fn deinit() void {
 pub fn initNoContext(allocator: std.mem.Allocator) void {
     mem_allocator = allocator;
     if (temp_buffer == null) {
-        temp_buffer = std.ArrayList(u8){};
+        temp_buffer = std.ArrayList(u8).empty;
         temp_buffer.?.resize(mem_allocator.?, 3 * 1024 + 1) catch unreachable;
     }
 }
@@ -132,12 +132,12 @@ extern fn zguiSetCurrentContext(ctx: ?Context) void;
 //--------------------------------------------------------------------------------------------------
 var mem_allocator: ?std.mem.Allocator = null;
 var mem_allocations: ?std.AutoHashMap(usize, usize) = null;
-var mem_mutex: std.Thread.Mutex = .{};
+var mem_mutex: std.Io.Mutex = std.Io.Mutex.init;
 const mem_alignment: std.mem.Alignment = .@"16";
 
 fn zguiMemAlloc(size: usize, _: ?*anyopaque) callconv(.c) ?*anyopaque {
-    mem_mutex.lock();
-    defer mem_mutex.unlock();
+    while (!mem_mutex.tryLock()) std.atomic.spinLoopHint();
+    defer _ = mem_mutex.state.swap(.unlocked, .release);
 
     const mem = mem_allocator.?.alignedAlloc(
         u8,
@@ -152,8 +152,8 @@ fn zguiMemAlloc(size: usize, _: ?*anyopaque) callconv(.c) ?*anyopaque {
 
 fn zguiMemFree(maybe_ptr: ?*anyopaque, _: ?*anyopaque) callconv(.c) void {
     if (maybe_ptr) |ptr| {
-        mem_mutex.lock();
-        defer mem_mutex.unlock();
+        while (!mem_mutex.tryLock()) std.atomic.spinLoopHint();
+        defer _ = mem_mutex.state.swap(.unlocked, .release);
 
         if (mem_allocations != null) {
             if (mem_allocations.?.fetchRemove(@intFromPtr(ptr))) |kv| {

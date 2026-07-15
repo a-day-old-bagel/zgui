@@ -1,8 +1,8 @@
 .{
     .name = .zgui,
     .fingerprint = 0xe78160e64acbef8,
-    .version = "0.15.1-dev",
-    .minimum_zig_version = "0.15.1",
+    .version = "0.16.0-dev",
+    .minimum_zig_version = "0.16.0",
     .paths = .{
         "build.zig",
         "build.zig.zon",
@@ -28,8 +28,8 @@
             .lazy = true,
         },
         .zsdl = .{
-            .url = "https://github.com/zig-gamedev/zsdl/archive/537de39b5719f39dcd612df2923607f3aedaf147.tar.gz",
-            .hash = "zsdl-0.4.0-dev-rFpjEzgIXwBdDmlda0YnQPRVApMc1YEgbyzLWuT9GupM",
+            .url = "https://github.com/zig-gamedev/zsdl/archive/fa05b59b5e133141680077534e6c86d8c98f8dec.tar.gz",
+            .hash = "zsdl-0.4.0-dev-rFpjE6PoXwBMQ7CuE5QFp4l7iRuNc6e6YZNAMyOtbWOa",
             .lazy = true,
         },
         .freetype = .{

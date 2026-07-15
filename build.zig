@@ -107,6 +107,7 @@ pub fn build(b: *std.Build) void {
         "-Wno-deprecated",
         "-Wno-pedantic",
         "-Wno-availability",
+        "-fobjc-arc",
     };
 
     const imgui_mod = b.addModule("imgui", .{
@@ -327,13 +328,7 @@ pub fn build(b: *std.Build) void {
             if (b.lazyDependency("zglfw", .{})) |zglfw| {
                 imgui_mod.addIncludePath(zglfw.path("libs/glfw/include"));
             }
-            const sdk_env = std.process.getEnvVarOwned(b.allocator, "VULKAN_SDK") catch |err| switch (err) {
-                error.EnvironmentVariableNotFound => null,
-                else => {
-                    std.debug.print("Failed to get VULKAN_SDK: {s}\n", .{@errorName(err)});
-                    @panic("Unexpected error reading environment variable");
-                },
-            };
+            const sdk_env: ?[]const u8 = b.graph.environ_map.get("VULKAN_SDK");
 
             if (options.vulkan_include) |path| {
                 imgui_mod.addSystemIncludePath(.{ .cwd_relative = path });
@@ -342,7 +337,6 @@ pub fn build(b: *std.Build) void {
                 imgui_mod.addSystemIncludePath(.{ .cwd_relative = vulkan_include });
             } else {
                 std.debug.print(
-                    \\Error: Vulkan headers not found for glfw_vulkan backend.
                     \\Please either:
                     \\  1. Set the VULKAN_SDK environment variable.
                     \\  2. Pass the path: -Dvulkan_include="C:/path/to/vulkan/include"
@@ -458,13 +452,7 @@ pub fn build(b: *std.Build) void {
             if (b.lazyDependency("zsdl", .{})) |zsdl| {
                 imgui_mod.addIncludePath(zsdl.path("libs/sdl3/include"));
             }
-            const sdk_env = std.process.getEnvVarOwned(b.allocator, "VULKAN_SDK") catch |err| switch (err) {
-                error.EnvironmentVariableNotFound => null,
-                else => {
-                    std.debug.print("Failed to get VULKAN_SDK: {s}\n", .{@errorName(err)});
-                    @panic("Unexpected error reading environment variable");
-                },
-            };
+            const sdk_env: ?[]const u8 = b.graph.environ_map.get("VULKAN_SDK");
 
             if (options.vulkan_include) |path| {
                 imgui_mod.addSystemIncludePath(.{ .cwd_relative = path });
@@ -501,17 +489,6 @@ pub fn build(b: *std.Build) void {
             });
         },
         .no_backend => {},
-    }
-
-    if (target.result.os.tag == .macos) {
-        if (b.lazyDependency("system_sdk", .{})) |system_sdk| {
-            imgui_mod.addSystemIncludePath(system_sdk.path("macos12/usr/include"));
-            imgui_mod.addFrameworkPath(system_sdk.path("macos12/System/Library/Frameworks"));
-        }
-    } else if (target.result.os.tag == .linux) {
-        if (b.lazyDependency("system_sdk", .{})) |system_sdk| {
-            imgui_mod.addSystemIncludePath(system_sdk.path("linux/include"));
-        }
     }
 
     const test_step = b.step("test", "Run zgui tests");
