@@ -96,7 +96,7 @@ pub const Style = extern struct {
         return style.colors[@intFromEnum(idx)];
     }
     pub fn setColor(style: *Style, idx: StyleCol, color: [4]f32) void {
-        style.colors[@intFromEnum(idx)] = color;
+        style.colors[@as(usize, @intCast(@intFromEnum(idx)))] = color;
     }
 };
 /// `pub fn getStyle() *Style`

@@ -1,7 +1,7 @@
 .{
     .name = .zgui,
     .fingerprint = 0xe78160e64acbef8,
-    .version = "0.6.0-dev",
+    .version = "0.16.0-dev",
     .minimum_zig_version = "0.16.0",
     .paths = .{
         "build.zig",
@@ -23,8 +23,8 @@
             .lazy = true,
         },
         .zgpu = .{
-            .url = "https://github.com/zig-gamedev/zgpu/archive/c512b60c1f0cd438dcc6297083d0e3d91ad5e717.tar.gz",
-            .hash = "zgpu-0.12.0-dev-nqFT5OOmCABcwCeEje63Wohd7SqQ73CbPqZzmuqArpgF",
+            .url = "https://github.com/a-day-old-bagel/zgpu/archive/dc915e7e433db3ba7f4c4b701f2fb27382aa7b86.tar.gz",
+            .hash = "zgpu-0.15.1-dev-nqFT5LbNBgC6imxdtRWInEPL7_8zXX0A_U9ISpJk_u0D",
             .lazy = true,
         },
         .zsdl = .{

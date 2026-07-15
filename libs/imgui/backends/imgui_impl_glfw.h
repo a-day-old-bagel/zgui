@@ -28,6 +28,12 @@
 #include "imgui.h"      // IMGUI_IMPL_API
 #ifndef IMGUI_DISABLE
 
+// BEGIN FIX(zig-gamedev)
+#ifdef __cplusplus
+extern "C" {
+#endif
+// END FIX(zig-gamedev)
+
 struct GLFWwindow;
 struct GLFWmonitor;
 
@@ -69,5 +75,10 @@ IMGUI_IMPL_API void     ImGui_ImplGlfw_Sleep(int milliseconds);
 IMGUI_IMPL_API float    ImGui_ImplGlfw_GetContentScaleForWindow(GLFWwindow* window);
 IMGUI_IMPL_API float    ImGui_ImplGlfw_GetContentScaleForMonitor(GLFWmonitor* monitor);
 
+// BEGIN FIX(zig-gamedev)
+#ifdef __cplusplus
+} // extern "C"
+#endif
+// END FIX(zig-gamedev)
 
 #endif // #ifndef IMGUI_DISABLE
