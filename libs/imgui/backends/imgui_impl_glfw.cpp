@@ -256,6 +256,7 @@ static ImGui_ImplGlfw_Data* ImGui_ImplGlfw_GetBackendData(GLFWwindow* window)
 static void ImGui_ImplGlfw_UpdateMonitors();
 static void ImGui_ImplGlfw_InitMultiViewportSupport();
 static void ImGui_ImplGlfw_ShutdownMultiViewportSupport();
+static void ImGui_ImplGlfw_GetWindowSizeAndFramebufferScale(GLFWwindow* window, ImVec2* out_size, ImVec2* out_framebuffer_scale);
 
 // Functions
 
@@ -507,10 +508,13 @@ void ImGui_ImplGlfw_WindowFocusCallback(GLFWwindow* window, int focused)
 
 static void ImGui_ImplGlfw_SetMousePosWithScaling(ImGui_ImplGlfw_Data* bd, GLFWwindow* window, ImGuiIO& io, double x, double y)
 {
-    float scale = ImGui_ImplGlfw_GetContentScaleForWindow(window);
+    // The application supplies ImGui display coordinates in framebuffer pixels;
+    // convert GLFW window coordinates using the actual window-to-framebuffer ratio.
+    ImVec2 framebuffer_scale;
+    ImGui_ImplGlfw_GetWindowSizeAndFramebufferScale(window, nullptr, &framebuffer_scale);
 
-    x *= scale;
-    y *= scale;
+    x *= framebuffer_scale.x;
+    y *= framebuffer_scale.y;
 
     io.AddMousePosEvent((float)x, (float)y);
     bd->LastValidMousePos = ImVec2((float)x, (float)y);
