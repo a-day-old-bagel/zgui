@@ -1378,12 +1378,15 @@ pub const StyleVar = enum(c_int) {
     scrollbar_rounding, // 1f
     grab_min_size, // 1f
     grab_rounding, // 1f
+    image_border_size, // 1f
     tab_rounding, // 1f
     tab_border_size, // 1f
     tab_bar_border_size, // 1f
     tab_bar_overline_size, // 1f
     table_angled_headers_angle, // 1f
     table_angled_headers_text_align, // 2f
+    tree_lines_size, // 1f
+    tree_lines_rounding, // 1f
     button_text_align, // 2f
     selectable_text_align, // 2f
     separator_text_border_size, // 1f
